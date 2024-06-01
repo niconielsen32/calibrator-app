@@ -54,7 +54,12 @@ def save_uploaded_files(uploaded_files, dir_prefix):
 
 def show():
 
+    if "calibration_type" not in state:
+        state.calibration_type = "Single Camera"
+
+
     calibration_type = st.selectbox("Calibration Type", ["Single Camera", "Stereo Camera"], key="calibration_type")
+    
 
     stream_type = st.selectbox("Select Stream Type", ["Upload Images", "Video File"], key="stream_type")
     if stream_type == "Upload Images":

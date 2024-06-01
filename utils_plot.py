@@ -1,47 +1,114 @@
+import plotly.graph_objects as go
 import cv2
-import json
 import numpy as np
-import os
-import glob
 import streamlit as st
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import tempfile
-from streamlit import session_state as state
-
 
 def plot_3d_calibration(objpoints, rvecs, tvecs):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    
+    fig = go.Figure()
+
     for i in range(len(objpoints)):
         rmat, _ = cv2.Rodrigues(rvecs[i])
-        imgpts, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], np.eye(3), np.zeros((4, 1)))
-
-        if objpoints[i].shape[1] < 3:
-            continue
-        ax.scatter(objpoints[i][:, 0], objpoints[i][:, 1], objpoints[i][:, 2], c='r', marker='o')
-        ax.scatter(imgpts[:, 0, 0], imgpts[:, 0, 1], c='b', marker='x')
+        transformed_objpoints = np.dot(objpoints[i], rmat.T) + tvecs[i].T
         
-        ax.scatter([0, tvecs[i][0][0]], [0, tvecs[i][1][0]], [0, tvecs[i][2][0]], c='g')
-    
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    st.pyplot(fig)
+        fig.add_trace(go.Scatter3d(
+            x=transformed_objpoints[:, 0],
+            y=transformed_objpoints[:, 1],
+            z=transformed_objpoints[:, 2],
+            mode='markers',
+            marker=dict(size=2, color='red'),
+            name=f'Object Points {i}'
+        ))
+
+        fig.add_trace(go.Scatter3d(
+            x=[tvecs[i][0][0]],
+            y=[tvecs[i][1][0]],
+            z=[tvecs[i][2][0]],
+            mode='markers',
+            marker=dict(size=4, color='green'),
+            name=f'Camera Position {i}'
+        ))
+
+    fig.update_layout(scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z'
+    ))
+
+    st.plotly_chart(fig)
+
 
 def plot_reprojection_errors(errors, title):
-    fig, ax = plt.subplots()
-    ax.scatter(range(len(errors)), errors, c='b', marker='o')
-    ax.set_xlabel('Image Index')
-    ax.set_ylabel('Reprojection Error')
-    ax.set_title(title)
-    st.pyplot(fig)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=list(range(len(errors))),
+        y=errors,
+        marker=dict(color='blue'),
+        width=[0.1] * len(errors)  # Set the width of the bars to make them closer
+    ))
+    fig.update_layout(
+        title=title,
+        xaxis=dict(
+            title='Image Index',
+            tickmode='array',
+            tickvals=list(range(len(errors))),
+            type='category'  # Ensure only integers are shown
+        ),
+        yaxis_title='Reprojection Error'
+    )
+    st.plotly_chart(fig)
 
-def draw_detections(image, corners, checkerboard_size, pattern_type):
-    if pattern_type == 'chessboard':
-        return cv2.drawChessboardCorners(image, checkerboard_size, corners, True)
-    elif pattern_type == 'charucoboard':
-        cv2.aruco.drawDetectedMarkers(image, corners)
-        return image
-    return image
+
+
+def plot_stereo_calibration(objpoints, left_rvecs, left_tvecs, right_rvecs, right_tvecs):
+    fig = go.Figure()
+
+    for i in range(len(objpoints)):
+        left_rmat, _ = cv2.Rodrigues(left_rvecs[i])
+        right_rmat, _ = cv2.Rodrigues(right_rvecs[i])
+        
+        transformed_left_objpoints = np.dot(objpoints[i], left_rmat.T) + left_tvecs[i].T
+        transformed_right_objpoints = np.dot(objpoints[i], right_rmat.T) + right_tvecs[i].T
+        
+        fig.add_trace(go.Scatter3d(
+            x=transformed_left_objpoints[:, 0],
+            y=transformed_left_objpoints[:, 1],
+            z=transformed_left_objpoints[:, 2],
+            mode='markers',
+            marker=dict(size=2, color='red'),
+            name=f'Left Object Points {i}'
+        ))
+        
+        fig.add_trace(go.Scatter3d(
+            x=transformed_right_objpoints[:, 0],
+            y=transformed_right_objpoints[:, 1],
+            z=transformed_right_objpoints[:, 2],
+            mode='markers',
+            marker=dict(size=2, color='blue'),
+            name=f'Right Object Points {i}'
+        ))
+
+        fig.add_trace(go.Scatter3d(
+            x=[left_tvecs[i][0][0]],
+            y=[left_tvecs[i][1][0]],
+            z=[left_tvecs[i][2][0]],
+            mode='markers',
+            marker=dict(size=4, color='green'),
+            name=f'Left Camera Position {i}'
+        ))
+        
+        fig.add_trace(go.Scatter3d(
+            x=[right_tvecs[i][0][0]],
+            y=[right_tvecs[i][1][0]],
+            z=[right_tvecs[i][2][0]],
+            mode='markers',
+            marker=dict(size=4, color='purple'),
+            name=f'Right Camera Position {i}'
+        ))
+
+    fig.update_layout(scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z'
+    ))
+
+    st.plotly_chart(fig)

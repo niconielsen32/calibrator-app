@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import numpy as np
 import cv2
+from streamlit import session_state as state
 
 def show():
     st.title("Download Calibration Data and Examples")
@@ -17,6 +18,22 @@ def show():
             st.download_button('Download Calibration Data', f, file_name=calibration_file)
     else:
         st.error("No calibration data found. Please run the calibration first.")
+
+    if st.button("Reset Calibration", key="reset_calibration"):
+        if 'webcam_caps' in state:
+            for cap in state.webcam_caps.values():
+                cap.release()
+        if 'rtsp_caps' in state:
+            for cap in state.rtsp_caps.values():
+                cap.release()
+        if 'video_caps' in state:
+            for cap in state.video_caps.values():
+                cap.release()
+        if 'current_cap' in state and state.current_cap:
+            state.current_cap.release()
+        state.temp_dir = None
+        state.capturing = False
+        st.success("Calibration reset successfully!")
     
     if calibration_type == "Single Camera":
         if camera_model == "Standard":
