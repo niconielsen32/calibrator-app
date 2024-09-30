@@ -19,7 +19,7 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
     images = glob.glob(os.path.join(images_path, '*'))
     
     if not images:
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, images_with_detections
     
     aruco_dicts = {
         'DICT_4X4_50': cv2.aruco.DICT_4X4_50,
@@ -47,7 +47,7 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
     
     if aruco_dict_name not in aruco_dicts:
         print("Unknown ArUco dictionary name")
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, images_with_detections
     
     aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dicts[aruco_dict_name])
     board = cv2.aruco.CharucoBoard((checkerboard_size[0], checkerboard_size[1]), square_size, marker_size, aruco_dict)
@@ -88,7 +88,7 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
         images_with_detections.append(img_with_detections)
     
     if not objpoints or not imgpoints:
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, images_with_detections
     
     if camera_model == "Standard":
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
