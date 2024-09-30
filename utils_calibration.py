@@ -8,9 +8,20 @@ from streamlit import session_state as state
 
 def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, marker_size, aruco_dict_name, camera_model="Standard", optimize=False):
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), np.float32)
+
+    print(checkerboard_size)
+    # Correct: Create an array with the proper number of checkerboard corners
+    objp = np.zeros(((checkerboard_size[0]) * (checkerboard_size[1]), 3), np.float32)
+    print(objp.shape)
+    # This line now correctly fills the array
     objp[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
+    print(objp.shape)
     objp *= square_size
+
+    if pattern_type == 'ChArUcoboard':
+        objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
+        objp *= square_size
     
     objpoints = []
     imgpoints = []
@@ -45,12 +56,10 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
         'DICT_APRILTAG_36h11': cv2.aruco.DICT_APRILTAG_36h11
     }
     
-    if aruco_dict_name not in aruco_dicts:
-        print("Unknown ArUco dictionary name")
-        return None, None, None, None, None, None, None, None, images_with_detections
-    
-    aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dicts[aruco_dict_name])
-    board = cv2.aruco.CharucoBoard((checkerboard_size[0], checkerboard_size[1]), square_size, marker_size, aruco_dict)
+
+    if pattern_type == 'ChArUcoboard':
+        aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dicts[aruco_dict_name])
+        board = cv2.aruco.CharucoBoard((checkerboard_size[0], checkerboard_size[1]), square_size, marker_size, aruco_dict)
     
     for fname in images:
         img = cv2.imread(fname)
@@ -61,7 +70,10 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
         found = False
         corners = []
         if pattern_type == 'Checkerboard':
-            checkerboard_size = (checkerboard_size[0] - 1, checkerboard_size[1] - 1)
+
+            checkerboard_size = (checkerboard_size[0], checkerboard_size[1])
+
+            print(checkerboard_size)
             found, corners = cv2.findChessboardCorners(gray, checkerboard_size)
             if found:
                 term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
