@@ -1,8 +1,8 @@
-opencv-contrib-python-headless==4.8.1.78
+opencv-contrib-python-headless
 pydub==0.25.1
 streamlit_webrtc~=0.47.7
 twilio~=8.10.1
-matplotlib==3.8.4
-numpy==1.26.4
+matplotlib
+numpy
 av
 plotly
