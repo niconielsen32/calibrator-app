@@ -1,5 +1,7 @@
 # Camera Calibration App
 
+![Camera Calibration App](page.png)
+
 A full-stack web application for camera calibration using OpenCV. Upload images of calibration patterns and obtain camera intrinsic and extrinsic parameters for computer vision applications.
 
 ## Features
