@@ -54,10 +54,9 @@ if os.path.exists(os.path.join(FRONTEND_DIST, "index.html")):
 
     # SPA fallback: serve index.html for unknown paths (after API and docs routes)
     from starlette.responses import FileResponse
-    from starlette.requests import Request
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str, request: Optional[Request] = None):
+    async def spa_fallback(full_path: str):
         index_path = os.path.join(FRONTEND_DIST, "index.html")
         # Do not hijack API/docs/openapi/static files
         if full_path.startswith("api/") or full_path in {"docs", "openapi.json", "redoc"}:
