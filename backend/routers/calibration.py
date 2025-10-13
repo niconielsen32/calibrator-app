@@ -10,8 +10,8 @@ import glob
 import os
 from datetime import datetime
 
-from database import get_db, CalibrationResult, Session as DBSession
-from utils.calibration import calibrate_camera
+from ..database import get_db, CalibrationResult, Session as DBSession
+from ..utils.calibration import calibrate_camera
 
 router = APIRouter()
 
