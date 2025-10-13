@@ -11,29 +11,6 @@ from twilio.rest import Client
 
 logger = logging.getLogger(__name__)
 
-def get_ice_servers():
-    """Use Twilio's TURN server because Streamlit Community Cloud has changed
-    its infrastructure and WebRTC connection cannot be established without TURN server now."""
-    try:
-        account_sid = "ACa040f1a87d88d4384ff1a7f46bd6f91f"
-        auth_token = "3b2eea2d9e742c0fd1d4271d7b8aa4e3"
-    except KeyError:
-        logger.warning(
-            "Twilio credentials are not set. Fallback to a free STUN server from Google."
-        )
-        return [{"urls": ["stun:stun.l.google.com:19302"]}]
-
-    client = Client(account_sid, auth_token)
-
-    try:
-        token = client.tokens.create()
-    except TwilioRestException as e:
-        st.warning(
-            f"Error occurred while accessing Twilio API. Fallback to a free STUN server from Google. ({e})"
-        )
-        return [{"urls": ["stun:stun.l.google.com:19302"]}]
-
-    return token.ice_servers
 
 def video_frame_callback(frame: av.VideoFrame) -> av.VideoFrame:
     img = frame.to_ndarray(format="bgr24")
