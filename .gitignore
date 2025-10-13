@@ -128,3 +128,9 @@ backend/uploads/f3ed682b-e74e-4d00-968b-0619770378e3/Image__2018-10-05__10-29-04
 backend/uploads/fa159b07-6a1d-4265-a280-00153dc9f668/Image__2018-10-05__10-29-04.png
 backend/utils/__pycache__/__init__.cpython-312.pyc
 backend/utils/__pycache__/calibration.cpython-312.pyc
+ 
+# Node / Frontend
+node_modules
+**/node_modules
+frontend/dist
+frontend/.vite

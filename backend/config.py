@@ -1,18 +1,17 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables from .env file (optional in Docker/Railway)
 load_dotenv()
 
-# Database configuration
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "calibrator")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "postgres")
+# Prefer a full DATABASE_URL if provided (e.g., from Railway Postgres)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Construct database URL
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if not DATABASE_URL:
+    # Fallback to SQLite file for zero-config deployments
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    SQLITE_PATH = os.path.join(BASE_DIR, "calibration.db")
+    DATABASE_URL = f"sqlite:///{SQLITE_PATH}"
 
 # API configuration
 APP_NAME = "Camera Calibration API"

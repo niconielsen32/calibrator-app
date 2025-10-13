@@ -1,8 +1,2 @@
-opencv-contrib-python-headless
-pydub==0.25.1
-streamlit_webrtc~=0.47.7
-twilio~=8.10.1
-matplotlib==3.7.5
-numpy
-av
-plotly
+# Root requirements delegate to backend-only deps
+-r backend/requirements.txt
