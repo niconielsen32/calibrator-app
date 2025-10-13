@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
-from config import DATABASE_URL
+from .config import DATABASE_URL
 
 # Create SQLAlchemy engine
 engine = create_engine(DATABASE_URL)

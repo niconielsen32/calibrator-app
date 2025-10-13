@@ -5,7 +5,7 @@ import os
 from typing import Optional
 
 # Import routers
-from routers import upload, calibration
+from .routers import upload, calibration
 
 # Create FastAPI app
 app = FastAPI(

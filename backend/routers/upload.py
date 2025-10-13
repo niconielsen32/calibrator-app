@@ -4,7 +4,7 @@ import os
 import uuid
 from typing import List
 
-from database import get_db, CalibrationImage, Session as DbSession
+from ..database import get_db, CalibrationImage, Session as DbSession
 
 router = APIRouter()
 
