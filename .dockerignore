@@ -1,0 +1,26 @@
+# Keep Docker build context lean and avoid broken symlinks
+
+# Git & metadata
+.git
+.gitignore
+.DS_Store
+
+# Node modules (host-installed; rebuild inside container instead)
+node_modules
+**/node_modules
+frontend/node_modules
+
+# Frontend build outputs
+dist
+build
+
+# Python caches and venvs
+__pycache__
+.pytest_cache
+.venv
+venv
+
+# Others
+*.log
+*.lock
+*.lockb
