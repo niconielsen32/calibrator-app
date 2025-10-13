@@ -10,18 +10,18 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
     print(checkerboard_size)
-    # Correct: Create an array with the proper number of checkerboard corners
-    objp = np.zeros(((checkerboard_size[0]) * (checkerboard_size[1]), 3), np.float32)
-    print(objp.shape)
+    l = np.zeros(((checkerboard_size[0]) * (checkerboard_size[1]), 3, np.float32))
+    print(l.shape)
     # This line now correctly fills the array
-    objp[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
-    print(objp.shape)
-    objp *= square_size
+    l[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
+    print(l.shape)
+    l *= square_size
+
 
     if pattern_type == 'ChArUcoboard':
-        objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), np.float32)
-        objp[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
-        objp *= square_size
+        l = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), np.float32)
+        l[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
+        l *= square_size
     
     objpoints = []
     imgpoints = []
@@ -79,7 +79,7 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
                 term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
                 cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), term)
                 frame_img_points = corners.reshape(-1, 2)
-                frame_obj_points = objp
+                frame_obj_points = l
                 img_with_detections = cv2.drawChessboardCorners(img, checkerboard_size, corners, found)
         elif pattern_type == 'ChArUcoboard':
             corners, ids, _ = cv2.aruco.detectMarkers(gray, aruco_dict)
