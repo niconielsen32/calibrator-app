@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Stone theme design system with light/dark mode support */
+
+@layer base {
+  :root {
+    /* Light mode - Stone theme */
+    --background: 0 0% 100%;
+    --foreground: 25 10% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 25 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 10% 15%;
+
+    --primary: 25 10% 15%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 25 5% 95%;
+    --secondary-foreground: 25 10% 15%;
+
+    --muted: 25 5% 95%;
+    --muted-foreground: 25 5% 45%;
+
+    --accent: 25 5% 95%;
+    --accent-foreground: 25 10% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 25 5% 90%;
+    --input: 25 5% 90%;
+    --ring: 25 10% 80%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 25 10% 15%;
+    --sidebar-primary: 25 10% 15%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 25 5% 95%;
+    --sidebar-accent-foreground: 25 10% 15%;
+    --sidebar-border: 25 5% 90%;
+    --sidebar-ring: 25 10% 80%;
+
+    /* Stone-specific colors for light mode */
+    --stone-50: 40 29% 98%;
+    --stone-100: 40 20% 96%;
+    --stone-200: 40 16% 93%;
+    --stone-300: 35 14% 86%;
+    --stone-400: 35 11% 70%;
+    --stone-500: 30 9% 64%;
+    --stone-600: 20 6% 46%;
+    --stone-700: 15 6% 31%;
+    --stone-800: 15 7% 20%;
+    --stone-900: 15 9% 15%;
+  }
+
+  .dark {
+    /* Dark mode - Stone theme */
+    --background: 25 24% 12%;
+    --foreground: 40 8% 95%;
+
+    --card: 25 22% 15%;
+    --card-foreground: 40 8% 95%;
+
+    --popover: 25 22% 15%;
+    --popover-foreground: 40 8% 95%;
+
+    --primary: 40 8% 95%;
+    --primary-foreground: 25 24% 12%;
+
+    --secondary: 25 20% 20%;
+    --secondary-foreground: 40 8% 95%;
+
+    --muted: 25 20% 18%;
+    --muted-foreground: 35 12% 70%;
+
+    --accent: 25 20% 20%;
+    --accent-foreground: 40 8% 95%;
+
+    --destructive: 0 65% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 25 20% 22%;
+    --input: 25 20% 22%;
+    --ring: 40 8% 90%;
+
+    --sidebar-background: 25 22% 14%;
+    --sidebar-foreground: 40 8% 90%;
+    --sidebar-primary: 40 8% 95%;
+    --sidebar-primary-foreground: 25 24% 12%;
+    --sidebar-accent: 25 20% 20%;
+    --sidebar-accent-foreground: 40 8% 95%;
+    --sidebar-border: 25 20% 22%;
+    --sidebar-ring: 40 8% 90%;
+
+    /* Stone-specific colors for dark mode */
+    --stone-50: 25 26% 18%;
+    --stone-100: 25 24% 22%;
+    --stone-200: 25 22% 28%;
+    --stone-300: 25 20% 35%;
+    --stone-400: 30 15% 45%;
+    --stone-500: 25 18% 55%;
+    --stone-600: 35 12% 65%;
+    --stone-700: 35 10% 75%;
+    --stone-800: 40 8% 85%;
+    --stone-900: 40 8% 95%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom stone theme utilities */
+  .stone-gradient {
+    background: linear-gradient(135deg, hsl(var(--stone-100)) 0%, hsl(var(--stone-200)) 100%);
+  }
+
+  .dark .stone-gradient {
+    background: linear-gradient(135deg, hsl(var(--stone-800)) 0%, hsl(var(--stone-700)) 100%);
+  }
+
+  .glass-effect {
+    backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .glass-effect {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Animation enhancements */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
