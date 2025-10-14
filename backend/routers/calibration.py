@@ -52,7 +52,7 @@ async def run_calibration(
 
     try:
         # Run calibration using the utility function
-        mtx, dist, mean_error, rvecs, tvecs, imgpoints, objpoints, reprojection_errors, images_with_detections = calibrate_camera(
+        mtx, dist, mean_error, rvecs, tvecs, imgpoints, objpoints, reprojection_errors, images_with_detections, image_detection_map = calibrate_camera(
             images_path=session.images_dir,
             checkerboard_size=(params.checkerboard_columns, params.checkerboard_rows),
             square_size=params.square_size,
@@ -134,7 +134,7 @@ async def preview_pattern_detection(
 
     try:
         # Run calibration with preview only
-        _, _, _, _, _, _, _, _, images_with_detections = calibrate_camera(
+        _, _, _, _, _, _, _, _, images_with_detections, image_detection_map = calibrate_camera(
             images_path=session.images_dir,
             checkerboard_size=(params.checkerboard_columns, params.checkerboard_rows),
             square_size=params.square_size,
@@ -142,40 +142,25 @@ async def preview_pattern_detection(
             camera_model="Standard",  # Use standard for preview
             optimize=False  # No optimization needed for preview
         )
-        
-        if not images_with_detections:
-            raise HTTPException(status_code=400, detail="No valid calibration patterns found in images")
-        
+
         # Convert images to base64 for response
         preview_results = []
-        images = sorted(glob.glob(os.path.join(session.images_dir, '*')))
-        
-        for i, img_path in enumerate(images):
-            # Read original image
-            img = cv2.imread(img_path)
-            if img is None:
-                continue
-                
-            # Check if pattern was detected for this image
-            corners_found = i < len(images_with_detections)
-            
-            # Get the preview image (with corners if detected)
-            preview_img = images_with_detections[i] if corners_found else img
-            
+
+        for img_path, (corners_found, preview_img) in image_detection_map.items():
             # Convert to base64
             _, buffer = cv2.imencode('.jpg', preview_img)
             img_base64 = base64.b64encode(buffer).decode('utf-8')
-            
+
             preview_results.append({
                 "image_path": img_path,
                 "corners_found": corners_found,
                 "preview_image": img_base64
             })
-        
+
         return {
             "status": "success",
             "results": preview_results
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

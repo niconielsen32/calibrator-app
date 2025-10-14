@@ -48,7 +48,7 @@ const CameraCalibration = () => {
 
   const [checkerboardWidth, setCheckerboardWidth] = useState('24');
   const [checkerboardHeight, setCheckerboardHeight] = useState('17');
-  const [squareSize, setSquareSize] = useState('0.03');
+  const [squareSize, setSquareSize] = useState('30');
   const [cameraModel, setCameraModel] = useState('standard');
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -61,6 +61,8 @@ const CameraCalibration = () => {
 
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewResults, setPreviewResults] = useState<PreviewResult[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [calibrationError, setCalibrationError] = useState<string | null>(null);
 
   const updateUploadStatus = (newStatus: typeof uploadStatus) => {
     setUploadStatus(newStatus);
@@ -135,9 +137,34 @@ const CameraCalibration = () => {
   };
 
   const handleCalibrate = async () => {
+    setCalibrationError(null);
+
     const currentUploadStatus = queryClient.getQueryData(['uploadStatus']) as typeof uploadStatus;
-    
+
+    // Check if images are uploaded
+    if (uploadedImages.length === 0) {
+      setCalibrationError("Please upload images before running calibration");
+      return;
+    }
+
+    // Check if session exists
     if (!currentUploadStatus?.sessionId) {
+      setCalibrationError("No upload session found. Please upload images first.");
+      return;
+    }
+
+    // Validate inputs
+    if (!checkerboardWidth || !checkerboardHeight || !squareSize) {
+      setCalibrationError("Please enter valid checkerboard dimensions and square size");
+      return;
+    }
+
+    const cols = parseInt(checkerboardWidth);
+    const rows = parseInt(checkerboardHeight);
+    const size = parseFloat(squareSize);
+
+    if (isNaN(cols) || isNaN(rows) || isNaN(size) || cols <= 0 || rows <= 0 || size <= 0) {
+      setCalibrationError("Checkerboard dimensions and square size must be positive numbers");
       return;
     }
 
@@ -149,14 +176,14 @@ const CameraCalibration = () => {
       calibration_type: "Single Camera",
       camera_model: cameraModel === 'standard' ? "Standard" : cameraModel === 'fisheye' ? "Fisheye" : "Omnidirectional",
       pattern_type: "Checkerboard",
-      checkerboard_columns: parseInt(checkerboardWidth),
-      checkerboard_rows: parseInt(checkerboardHeight),
-      square_size: parseFloat(squareSize),
+      checkerboard_columns: cols,
+      checkerboard_rows: rows,
+      square_size: size / 1000, // Convert mm to meters
       run_optimization: runOptimization,
       marker_size: 0,
       aruco_dict_name: "string"
     };
-    
+
     try {
       const response = await fetch(`${API_URL}/calibration/calibrate/${currentUploadStatus.sessionId}`, {
         method: 'POST',
@@ -167,14 +194,15 @@ const CameraCalibration = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Calibration failed: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Calibration failed: ${response.statusText}`);
       }
 
       const data = await response.json();
-      
+
       const cameraMatrix = data.results.camera_matrix;
       const distCoeffs = data.results.dist_coeffs;
-      
+
       const results = {
         fx: cameraMatrix[0][0],
         fy: cameraMatrix[1][1],
@@ -189,13 +217,15 @@ const CameraCalibration = () => {
         num_images_calibrated: data.results.num_images_calibrated,
         session_id: currentUploadStatus.sessionId
       };
-      
+
       setCalibrationResults(results);
       setCalibrationComplete(true);
+      setCalibrationError(null);
       queryClient.setQueryData(['calibrationResults'], results);
-      
+
     } catch (error) {
       console.error('Calibration error:', error);
+      setCalibrationError(error instanceof Error ? error.message : "Calibration failed. Please check your parameters and try again.");
     } finally {
       setIsCalibrating(false);
       setCalibrationProgress(100);
@@ -203,9 +233,34 @@ const CameraCalibration = () => {
   };
 
   const handlePreview = async () => {
+    setPreviewError(null);
+
     const currentUploadStatus = queryClient.getQueryData(['uploadStatus']) as typeof uploadStatus;
-    
+
+    // Check if images are uploaded
+    if (uploadedImages.length === 0) {
+      setPreviewError("Please upload images before running preview");
+      return;
+    }
+
+    // Check if session exists
     if (!currentUploadStatus?.sessionId) {
+      setPreviewError("No upload session found. Please upload images first.");
+      return;
+    }
+
+    // Validate inputs
+    if (!checkerboardWidth || !checkerboardHeight || !squareSize) {
+      setPreviewError("Please enter valid checkerboard dimensions and square size");
+      return;
+    }
+
+    const cols = parseInt(checkerboardWidth);
+    const rows = parseInt(checkerboardHeight);
+    const size = parseFloat(squareSize);
+
+    if (isNaN(cols) || isNaN(rows) || isNaN(size) || cols <= 0 || rows <= 0 || size <= 0) {
+      setPreviewError("Checkerboard dimensions and square size must be positive numbers");
       return;
     }
 
@@ -215,11 +270,11 @@ const CameraCalibration = () => {
     const previewParams = {
       calibration_type: "Single Camera",
       pattern_type: "Checkerboard",
-      checkerboard_columns: parseInt(checkerboardWidth),
-      checkerboard_rows: parseInt(checkerboardHeight),
-      square_size: parseFloat(squareSize)
+      checkerboard_columns: cols,
+      checkerboard_rows: rows,
+      square_size: size / 1000 // Convert mm to meters
     };
-    
+
     try {
       const response = await fetch(`${API_URL}/calibration/preview/${currentUploadStatus.sessionId}`, {
         method: 'POST',
@@ -230,14 +285,17 @@ const CameraCalibration = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Preview failed: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Preview failed: ${response.statusText}`);
       }
 
       const data = await response.json();
       setPreviewResults(data.results);
-      
+      setPreviewError(null);
+
     } catch (error) {
       console.error('Preview error:', error);
+      setPreviewError(error instanceof Error ? error.message : "Failed to preview pattern detection");
     } finally {
       setIsPreviewing(false);
     }
@@ -252,6 +310,8 @@ const CameraCalibration = () => {
     setCalibrationProgress(0);
     setPreviewResults([]);
     setIsPreviewing(false);
+    setPreviewError(null);
+    setCalibrationError(null);
     queryClient.setQueryData(['uploadedImages'], []);
     queryClient.setQueryData(['calibrationResults'], null);
     queryClient.setQueryData(['uploadStatus'], null);
@@ -521,9 +581,9 @@ const CameraCalibration = () => {
                       value={squareSize}
                       onChange={(e) => setSquareSize(e.target.value)}
                       className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600 focus:border-stone-500 dark:focus:border-stone-400"
-                      placeholder="25"
+                      placeholder="30"
                     />
-                    <p className="text-sm text-stone-500 dark:text-stone-400">Will be converted to meters when sending to API</p>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">Enter the size of each square in your checkerboard pattern</p>
                   </div>
                 </div>
 
@@ -601,7 +661,7 @@ const CameraCalibration = () => {
                         
                         {!calibrationComplete && (
                           <div className="mt-4 pt-4 border-t border-stone-200 dark:border-stone-700">
-                            <Button 
+                            <Button
                               onClick={handlePreview}
                               disabled={isPreviewing}
                               className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all duration-200 disabled:opacity-50"
@@ -618,6 +678,14 @@ const CameraCalibration = () => {
                                 </>
                               )}
                             </Button>
+                            {previewError && (
+                              <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-md bg-red-900/30 border border-red-800 animate-fade-in">
+                                <X className="h-4 w-4 text-red-400 flex-shrink-0" />
+                                <span className="text-sm font-medium text-red-300">
+                                  {previewError}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -637,9 +705,9 @@ const CameraCalibration = () => {
                         <p className="text-sm text-stone-600 dark:text-stone-400 mb-3">
                           Verify that checkerboard patterns can be detected in your images before running calibration
                         </p>
-                        <Button 
+                        <Button
                           onClick={handlePreview}
-                          disabled={isPreviewing || uploadedImages.length === 0 || !uploadStatus?.sessionId}
+                          disabled={isPreviewing}
                           className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all duration-200 disabled:opacity-50"
                         >
                           {isPreviewing ? (
@@ -654,6 +722,14 @@ const CameraCalibration = () => {
                             </>
                           )}
                         </Button>
+                        {previewError && (
+                          <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-md bg-red-900/30 border border-red-800 animate-fade-in">
+                            <X className="h-4 w-4 text-red-400 flex-shrink-0" />
+                            <span className="text-sm font-medium text-red-300">
+                              {previewError}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -671,14 +747,24 @@ const CameraCalibration = () => {
                         <p className="text-sm text-stone-600 dark:text-stone-400 mb-3">
                           Run full calibration to calculate camera parameters and generate results
                         </p>
-                        <Button 
+                        <Button
                           onClick={handleCalibrate}
-                          disabled={isCalibrating || uploadedImages.length === 0 || !uploadStatus?.sessionId}
+                          disabled={isCalibrating}
                           className="w-full py-3 bg-green-600 hover:bg-green-700 text-white shadow-md transition-all duration-200 disabled:opacity-50"
                         >
                           <Play className="w-5 h-5 mr-3" />
                           {isCalibrating ? 'Calibrating...' : `Start Calibration (${uploadedImages.length} images)`}
                         </Button>
+
+                        {/* Error Message */}
+                        {calibrationError && (
+                          <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-md bg-red-900/30 border border-red-800 animate-fade-in">
+                            <X className="h-4 w-4 text-red-400 flex-shrink-0" />
+                            <span className="text-sm font-medium text-red-300">
+                              {calibrationError}
+                            </span>
+                          </div>
+                        )}
 
                         {/* Calibration Progress */}
                         {isCalibrating && (
@@ -688,8 +774,8 @@ const CameraCalibration = () => {
                                 <span className="font-medium">Calibration Progress</span>
                                 <span className="text-lg font-bold">{calibrationProgress}%</span>
                               </div>
-                              <Progress 
-                                value={calibrationProgress} 
+                              <Progress
+                                value={calibrationProgress}
                                 className="w-full h-3 bg-stone-200 dark:bg-stone-700"
                               />
                               <p className="text-sm text-stone-600 dark:text-stone-400">

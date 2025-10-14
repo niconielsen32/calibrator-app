@@ -28,12 +28,13 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
     objpoints = []
     imgpoints = []
     images_with_detections = []
-    
+    image_detection_map = {}  # Maps image path to (detection_success, annotated_image)
+
     # Get sorted list of images for consistent order
     images = sorted(glob.glob(os.path.join(images_path, '*')))
     
     if not images:
-        return None, None, None, None, None, None, None, None, images_with_detections
+        return None, None, None, None, None, None, None, None, images_with_detections, image_detection_map
     
     aruco_dicts = {
         'DICT_4X4_50': cv2.aruco.DICT_4X4_50,
@@ -76,17 +77,20 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
             checkerboard_size = (checkerboard_size[0], checkerboard_size[1])
             print(checkerboard_size)
             found, corners = cv2.findChessboardCorners(gray, checkerboard_size)
-            
+
             if found:
                 term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
                 cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), term)
                 frame_img_points = corners.reshape(-1, 2)
                 frame_obj_points = objp
-                img_with_detections = cv2.drawChessboardCorners(img, checkerboard_size, corners, found)
-                
+                img_with_detections = cv2.drawChessboardCorners(img.copy(), checkerboard_size, corners, found)
+
                 imgpoints.append(frame_img_points)
                 objpoints.append(frame_obj_points)
                 images_with_detections.append(img_with_detections)
+                image_detection_map[fname] = (True, img_with_detections)
+            else:
+                image_detection_map[fname] = (False, img)
                 
         elif pattern_type == 'ChArUcoboard':
             corners, ids, _ = cv2.aruco.detectMarkers(gray, aruco_dict)
@@ -96,15 +100,20 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
                     frame_img_points = charuco_corners
                     frame_obj_points = board.getChessboardCorners()[charuco_ids.flatten()]
                     found = True
-                    img_with_detections = cv2.aruco.drawDetectedMarkers(img, corners, ids)
+                    img_with_detections = cv2.aruco.drawDetectedMarkers(img.copy(), corners, ids)
                     img_with_detections = cv2.aruco.drawDetectedCornersCharuco(img_with_detections, charuco_corners, charuco_ids)
-                    
+
                     imgpoints.append(frame_img_points)
                     objpoints.append(frame_obj_points)
                     images_with_detections.append(img_with_detections)
+                    image_detection_map[fname] = (True, img_with_detections)
+                else:
+                    image_detection_map[fname] = (False, img)
+            else:
+                image_detection_map[fname] = (False, img)
     
     if not objpoints or not imgpoints:
-        return None, None, None, None, None, None, None, None, images_with_detections
+        return None, None, None, None, None, None, None, None, images_with_detections, image_detection_map
     
     if camera_model == "Standard":
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
@@ -162,16 +171,16 @@ def calibrate_camera(images_path, checkerboard_size, square_size, pattern_type, 
         reprojection_errors.append(error)
     
     mean_error = mean_error / len(objpoints)
-    
-    return mtx, dist, mean_error, rvecs, tvecs, imgpoints, objpoints, reprojection_errors, images_with_detections
+
+    return mtx, dist, mean_error, rvecs, tvecs, imgpoints, objpoints, reprojection_errors, images_with_detections, image_detection_map
 
 def calibrate_stereo_cameras(left_images_path, right_images_path, checkerboard_size, square_size, pattern_type, marker_size, aruco_dict_name, camera_model="Standard", optimize=False):
     """
     Calibrate stereo cameras using images from two directories.
     """
-    left_mtx, left_dist, left_error, left_rvecs, left_tvecs, left_imgpoints, left_objpoints, left_reprojection_errors, left_images_with_detections = calibrate_camera(
+    left_mtx, left_dist, left_error, left_rvecs, left_tvecs, left_imgpoints, left_objpoints, left_reprojection_errors, left_images_with_detections, left_image_detection_map = calibrate_camera(
         left_images_path, checkerboard_size, square_size, pattern_type, marker_size, aruco_dict_name, camera_model, optimize)
-    right_mtx, right_dist, right_error, right_rvecs, right_tvecs, right_imgpoints, right_objpoints, right_reprojection_errors, right_images_with_detections = calibrate_camera(
+    right_mtx, right_dist, right_error, right_rvecs, right_tvecs, right_imgpoints, right_objpoints, right_reprojection_errors, right_images_with_detections, right_image_detection_map = calibrate_camera(
         right_images_path, checkerboard_size, square_size, pattern_type, marker_size, aruco_dict_name, camera_model, optimize)
     
     if left_mtx is None or right_mtx is None:
