@@ -8,7 +8,7 @@ import threading
 import time
 
 # Import routers
-from .routers import upload, calibration
+from .routers import upload, calibration, stereo_calibration, live_calibration, quality_advisor
 from .utils.cleanup import cleanup_old_sessions, cleanup_orphaned_files
 
 def run_cleanup_task():
@@ -65,6 +65,9 @@ app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
 # Include routers (mounted under /api)
 app.include_router(upload.router, prefix="/api/v1/upload", tags=["upload"])
 app.include_router(calibration.router, prefix="/api/v1/calibration", tags=["calibration"])
+app.include_router(stereo_calibration.router, prefix="/api/v1/stereo", tags=["stereo-calibration"])
+app.include_router(live_calibration.router, prefix="/api/v1/live", tags=["live-calibration"])
+app.include_router(quality_advisor.router, prefix="/api/v1/quality", tags=["quality-advisor"])
 
 @app.get("/api")
 async def api_root():

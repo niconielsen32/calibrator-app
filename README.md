@@ -6,12 +6,21 @@ A full-stack web application for camera calibration using OpenCV. Upload images 
 
 ## Features
 
-- 📸 Camera calibration using checkerboard patterns
-- 🎯 Support for both monocular and stereo camera calibration
-- 📊 Interactive visualization of calibration results
-- 💾 Save and manage calibration data
+### Core Calibration
+- 📸 **Monocular Camera Calibration** - Calibrate single cameras using checkerboard or ChArUco patterns
+- 🎯 **Stereo Camera Calibration** - Full stereo calibration workflow with rectification and depth mapping
+- 📹 **Live Camera Calibration** - Real-time pattern detection with guided capture and auto-capture
+- 📊 **Calibration Quality Advisor** - Intelligent analysis with coverage heatmaps and recommendations
+
+### Advanced Features
+- ✨ Support for Standard, Fisheye, and Omnidirectional camera models
+- 🎨 Interactive 3D visualization of camera poses
+- 📈 Per-image quality metrics and reprojection error analysis
+- 🔍 Coverage analysis (center, corners, edges)
+- 🎯 Pose diversity metrics for optimal calibration
+- 💾 Save and manage calibration sessions
 - 🔄 RESTful API for programmatic access
-- 🎨 Modern, responsive UI with dark mode support
+- 🌓 Modern, responsive UI with dark mode support
 
 ## Tech Stack
 
@@ -155,6 +164,7 @@ Upload Images → Preview Detection → Run Calibration → View Results → Dow
 
 ### Documentation
 
+- **[NEW_FEATURES.md](NEW_FEATURES.md)** - **✨ NEW!** Documentation for Stereo, Live, and Quality Advisor features
 - **[CALIBRATION_PIPELINE.md](CALIBRATION_PIPELINE.md)** - Complete pipeline documentation
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Code examples for using calibration data
 - **[CLEANUP.md](CLEANUP.md)** - Image cleanup and maintenance
