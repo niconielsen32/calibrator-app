@@ -66,18 +66,21 @@ npm install
 
 ### Development Mode
 
-1. **Start the backend server:**
+**Terminal 1 - Backend (Port 8000):**
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-2. **Start the frontend dev server** (in a new terminal):
+**Terminal 2 - Frontend (Port 8080):**
 ```bash
 cd frontend
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173` and the backend API at `http://localhost:8000`.
+Access the app at:
+- **Frontend**: http://localhost:8080
+- **Backend API**: http://127.0.0.1:8000
+- **API Docs**: http://127.0.0.1:8000/docs
 
 ### Production Mode
 
@@ -134,11 +137,27 @@ Once the backend is running, visit:
 
 ## Usage
 
-1. Prepare calibration images with a checkerboard pattern
-2. Upload images through the web interface
-3. Configure calibration parameters (board size, square size, etc.)
-4. Run calibration to obtain camera parameters
-5. View and download calibration results
+### Quick Start
+
+1. **Prepare Images**: Capture 20-30 images of a checkerboard pattern from different angles
+2. **Upload**: Drag and drop images into the web interface
+3. **Configure**: Set checkerboard dimensions (rows, columns) and square size (mm)
+4. **Preview**: Click "Preview Pattern Detection" to verify corner detection works
+5. **Calibrate**: Click "Start Calibration" to process all images
+6. **Download**: Click "Download JSON" to get calibration parameters
+7. **Use**: Apply parameters in your application (see [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md))
+
+### Workflow
+
+```
+Upload Images → Preview Detection → Run Calibration → View Results → Download JSON
+```
+
+### Documentation
+
+- **[CALIBRATION_PIPELINE.md](CALIBRATION_PIPELINE.md)** - Complete pipeline documentation
+- **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Code examples for using calibration data
+- **[CLEANUP.md](CLEANUP.md)** - Image cleanup and maintenance
 
 ## License
 

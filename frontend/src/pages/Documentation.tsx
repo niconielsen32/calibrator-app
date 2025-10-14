@@ -370,11 +370,11 @@ int main() {
 
   const CodeBlock = ({ code, language, title, codeId }: { code: string; language: string; title: string; codeId: string }) => (
     <div className="relative group">
-      <div className="flex items-center justify-between bg-stone-800 dark:bg-stone-900 px-6 py-4 rounded-t-lg border-b border-stone-700">
+      <div className="flex items-center justify-between bg-stone-100 dark:bg-stone-800 px-6 py-4 rounded-t-lg border-b border-stone-200 dark:border-stone-700">
         <div className="flex items-center space-x-3">
-          <Code2 className="w-5 h-5 text-stone-400" />
-          <h4 className="text-stone-200 font-medium">{title}</h4>
-          <Badge variant="secondary" className="text-xs bg-stone-700 text-stone-300">
+          <Code2 className="w-5 h-5 text-stone-600 dark:text-stone-400" />
+          <h4 className="text-stone-900 dark:text-stone-200 font-medium">{title}</h4>
+          <Badge variant="secondary" className="text-xs bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
             {language}
           </Badge>
         </div>
@@ -382,7 +382,7 @@ int main() {
           variant="ghost"
           size="sm"
           onClick={() => handleCopyCode(codeId, code)}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-stone-400 hover:text-stone-200"
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
         >
           {copiedCode === codeId ? (
             <Check className="w-4 h-4" />
@@ -391,66 +391,16 @@ int main() {
           )}
         </Button>
       </div>
-      <div className="bg-stone-900 dark:bg-stone-950 overflow-x-auto rounded-b-lg">
+      <div className="bg-stone-50 dark:bg-stone-900 overflow-x-auto rounded-b-lg border border-stone-200 dark:border-stone-700">
         <pre className="p-6 text-sm leading-relaxed">
-          <code 
-            className="text-stone-200"
-            dangerouslySetInnerHTML={{
-              __html: highlightCode(code, language)
-            }}
-          />
+          <code className="text-stone-800 dark:text-stone-200 font-mono">
+            {code}
+          </code>
         </pre>
       </div>
     </div>
   );
 
-  const highlightCode = (code: string, language: string) => {
-    let highlighted = code;
-    
-    if (language === 'python') {
-      highlighted = highlighted
-        // Keywords
-        .replace(/\b(import|from|def|class|if|else|elif|for|while|try|except|with|as|return|yield|lambda|and|or|not|in|is|None|True|False|raise)\b/g, '<span style="color: #569cd6;">$1</span>')
-        // Built-in types
-        .replace(/\b(str|int|float|list|dict|tuple|set|bool)\b/g, '<span style="color: #4ec9b0;">$1</span>')
-        // String literals
-        .replace(/(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span style="color: #ce9178;">$1$2$1</span>')
-        // Comments
-        .replace(/#[^\n]*/g, '<span style="color: #6a9955;">$&</span>')
-        // Numbers
-        .replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #b5cea8;">$1</span>')
-        // Function calls and imports
-        .replace(/\b(cv2|np|json|Path|print|open|load|array|ravel|zeros|imread|imwrite|getOptimalNewCameraMatrix|undistort)\b(?=\s*[\.\(])/g, '<span style="color: #dcdcaa;">$1</span>')
-        // Class names
-        .replace(/\b([A-Z][a-zA-Z]*)\b/g, '<span style="color: #4ec9b0;">$1</span>')
-        // Special variables
-        .replace(/\b(__[a-zA-Z]+__)\b/g, '<span style="color: #569cd6;">$1</span>')
-        // Function definitions
-        .replace(/\b(def)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, '<span style="color: #569cd6;">$1</span> <span style="color: #dcdcaa;">$2</span>');
-    } else if (language === 'cpp') {
-      highlighted = highlighted
-        // Keywords
-        .replace(/\b(class|public|private|protected|static|const|try|catch|throw|if|else|for|while|return|using|namespace|auto|void|int|double|size_t)\b/g, '<span style="color: #569cd6;">$1</span>')
-        // Preprocessor directives
-        .replace(/(#include\s*<[^>]*>)/g, '<span style="color: #c586c0;">$1</span>')
-        // String literals
-        .replace(/(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span style="color: #ce9178;">$1$2$1</span>')
-        // Comments
-        .replace(/\/\/[^\n]*/g, '<span style="color: #6a9955;">$&</span>')
-        // Numbers
-        .replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #b5cea8;">$1</span>')
-        // Function calls
-        .replace(/\b(std::|cv::)?(cout|cerr|endl|Mat|Size|imread|imwrite|getOptimalNewCameraMatrix|undistort|push_back|empty|zeros|at|size)\b(?=\s*[\.\(])?/g, '<span style="color: #dcdcaa;">$1$2</span>')
-        // Class names and namespaces
-        .replace(/\b(std|cv|json|CameraCalibration)\b::/g, '<span style="color: #4ec9b0;">$1</span>::')
-        // Operators
-        .replace(/(&lt;&lt;|&gt;&gt;|-&gt;|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||\?|:)/g, '<span style="color: #d4d4d4;">$1</span>')
-        // Templates
-        .replace(/(&lt;[^&]*&gt;)/g, '<span style="color: #4ec9b0;">$1</span>');
-    }
-    
-    return highlighted;
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 to-stone-100 dark:from-stone-900 dark:to-stone-800">
@@ -464,9 +414,6 @@ int main() {
             <h1 className="text-5xl font-bold text-stone-900 dark:text-stone-100 mb-4">
               Technical Documentation
             </h1>
-            <p className="text-xl text-stone-600 dark:text-stone-400 max-w-3xl mx-auto leading-relaxed">
-              Comprehensive guide for professional camera calibration with advanced techniques and best practices
-            </p>
           </div>
         </div>
 

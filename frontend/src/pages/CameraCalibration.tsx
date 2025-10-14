@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckedState } from '@radix-ui/react-checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const API_URL = 'http://127.0.0.1:8080/api/v1';
+const API_URL = 'http://127.0.0.1:8000/api/v1';
 
 interface PreviewResult {
   image_path: string;
@@ -46,9 +46,13 @@ const CameraCalibration = () => {
   const [uploadStatus, setUploadStatus] = useState<{success: boolean; message: string; sessionId?: string} | null>(persistedUploadStatus);
   const [imagesUploaded, setImagesUploaded] = useState(!!persistedUploadStatus?.sessionId);
 
+  const [calibrationType, setCalibrationType] = useState('Single Camera');
+  const [patternType, setPatternType] = useState('Checkerboard');
   const [checkerboardWidth, setCheckerboardWidth] = useState('24');
   const [checkerboardHeight, setCheckerboardHeight] = useState('17');
   const [squareSize, setSquareSize] = useState('30');
+  const [markerSize, setMarkerSize] = useState('20');
+  const [arucoDictName, setArucoDictName] = useState('DICT_6X6_250');
   const [cameraModel, setCameraModel] = useState('standard');
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -114,10 +118,54 @@ const CameraCalibration = () => {
     event.preventDefault();
   };
 
-  const handleDrop = (event: React.DragEvent) => {
+  const handleDrop = async (event: React.DragEvent) => {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
-    setUploadedImages([...uploadedImages, ...files]);
+
+    // Filter for image files only
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    setUploadedImages(imageFiles);
+
+    // Automatically upload files
+    const formData = new FormData();
+    imageFiles.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    setIsUploading(true);
+    updateUploadStatus(null);
+
+    try {
+      const response = await fetch(`${API_URL}/upload/`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      updateUploadStatus({
+        success: true,
+        message: `Successfully uploaded ${imageFiles.length} images`,
+        sessionId: data.session_id
+      });
+      setImagesUploaded(true);
+    } catch (error) {
+      console.error('Upload error:', error);
+      updateUploadStatus({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to upload images"
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const removeImage = (index: number) => {
@@ -149,7 +197,7 @@ const CameraCalibration = () => {
 
     // Check if session exists
     if (!currentUploadStatus?.sessionId) {
-      setCalibrationError("No upload session found. Please upload images first.");
+      setCalibrationError("Images selected but not uploaded to server. Please select your images again to upload them.");
       return;
     }
 
@@ -173,15 +221,15 @@ const CameraCalibration = () => {
     setCalibrationComplete(false);
 
     const calibrationParams = {
-      calibration_type: "Single Camera",
+      calibration_type: calibrationType,
       camera_model: cameraModel === 'standard' ? "Standard" : cameraModel === 'fisheye' ? "Fisheye" : "Omnidirectional",
-      pattern_type: "Checkerboard",
+      pattern_type: patternType,
       checkerboard_columns: cols,
       checkerboard_rows: rows,
       square_size: size / 1000, // Convert mm to meters
       run_optimization: runOptimization,
-      marker_size: 0,
-      aruco_dict_name: "string"
+      marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) / 1000 : 0,
+      aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : "DICT_6X6_250"
     };
 
     try {
@@ -215,7 +263,15 @@ const CameraCalibration = () => {
         k3: distCoeffs[0][4],
         reprojection_error: data.results.reprojection_error,
         num_images_calibrated: data.results.num_images_calibrated,
-        session_id: currentUploadStatus.sessionId
+        session_id: currentUploadStatus.sessionId,
+        per_image_results: data.results.per_image_results || [],
+        reprojection_errors: data.results.reprojection_errors || [],
+        undistorted_previews: data.results.undistorted_previews || [],
+        rotation_vectors: data.results.rotation_vectors || [],
+        translation_vectors: data.results.translation_vectors || [],
+        checkerboard_rows: data.results.checkerboard_rows || rows,
+        checkerboard_cols: data.results.checkerboard_cols || cols,
+        square_size: data.results.square_size || (size / 1000)
       };
 
       setCalibrationResults(results);
@@ -245,7 +301,7 @@ const CameraCalibration = () => {
 
     // Check if session exists
     if (!currentUploadStatus?.sessionId) {
-      setPreviewError("No upload session found. Please upload images first.");
+      setPreviewError("Images selected but not uploaded to server. Please select your images again to upload them.");
       return;
     }
 
@@ -268,11 +324,13 @@ const CameraCalibration = () => {
     setPreviewResults([]);
 
     const previewParams = {
-      calibration_type: "Single Camera",
-      pattern_type: "Checkerboard",
+      calibration_type: calibrationType,
+      pattern_type: patternType,
       checkerboard_columns: cols,
       checkerboard_rows: rows,
-      square_size: size / 1000 // Convert mm to meters
+      square_size: size / 1000, // Convert mm to meters
+      marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) / 1000 : undefined,
+      aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : undefined
     };
 
     try {
@@ -301,7 +359,21 @@ const CameraCalibration = () => {
     }
   };
 
-  const resetImages = () => {
+  const resetImages = async () => {
+    const currentUploadStatus = queryClient.getQueryData(['uploadStatus']) as typeof uploadStatus;
+
+    // Delete session from backend if it exists
+    if (currentUploadStatus?.sessionId) {
+      try {
+        await fetch(`${API_URL}/upload/session/${currentUploadStatus.sessionId}`, {
+          method: 'DELETE',
+        });
+      } catch (error) {
+        console.error('Error deleting session:', error);
+      }
+    }
+
+    // Clear frontend state
     setUploadedImages([]);
     updateUploadStatus(null);
     setImagesUploaded(false);
@@ -517,24 +589,26 @@ const CameraCalibration = () => {
               <CardContent className="p-8 space-y-8">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Calibration Type</h3>
-                  <Select value="Single Camera" disabled>
+                  <Select value={calibrationType} onValueChange={setCalibrationType}>
                     <SelectTrigger className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600">
                       <SelectValue placeholder="Select calibration type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Single Camera">Single Camera</SelectItem>
+                      <SelectItem value="Stereo Camera" disabled>Stereo Camera (Coming Soon)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Pattern Type</h3>
-                  <Select value="Checkerboard" disabled>
+                  <Select value={patternType} onValueChange={setPatternType}>
                     <SelectTrigger className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600">
                       <SelectValue placeholder="Select pattern type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Checkerboard">Checkerboard</SelectItem>
+                      <SelectItem value="ChArUcoboard">ChArUco Board</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -583,8 +657,61 @@ const CameraCalibration = () => {
                       className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600 focus:border-stone-500 dark:focus:border-stone-400"
                       placeholder="30"
                     />
-                    <p className="text-sm text-stone-500 dark:text-stone-400">Enter the size of each square in your checkerboard pattern</p>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">Enter the size of each square in your {patternType === 'ChArUcoboard' ? 'ChArUco' : 'checkerboard'} pattern</p>
                   </div>
+
+                  {patternType === 'ChArUcoboard' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="marker-size" className="text-stone-700 dark:text-stone-300 font-medium">
+                          Marker Size (millimeters)
+                        </Label>
+                        <Input
+                          id="marker-size"
+                          value={markerSize}
+                          onChange={(e) => setMarkerSize(e.target.value)}
+                          className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600 focus:border-stone-500 dark:focus:border-stone-400"
+                          placeholder="20"
+                        />
+                        <p className="text-sm text-stone-500 dark:text-stone-400">Enter the size of the ArUco markers</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="aruco-dict" className="text-stone-700 dark:text-stone-300 font-medium">
+                          ArUco Dictionary
+                        </Label>
+                        <Select value={arucoDictName} onValueChange={setArucoDictName}>
+                          <SelectTrigger id="aruco-dict" className="bg-stone-50 dark:bg-stone-900 border-stone-300 dark:border-stone-600">
+                            <SelectValue placeholder="Select ArUco dictionary" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="DICT_4X4_50">4x4 (50 markers)</SelectItem>
+                            <SelectItem value="DICT_4X4_100">4x4 (100 markers)</SelectItem>
+                            <SelectItem value="DICT_4X4_250">4x4 (250 markers)</SelectItem>
+                            <SelectItem value="DICT_4X4_1000">4x4 (1000 markers)</SelectItem>
+                            <SelectItem value="DICT_5X5_50">5x5 (50 markers)</SelectItem>
+                            <SelectItem value="DICT_5X5_100">5x5 (100 markers)</SelectItem>
+                            <SelectItem value="DICT_5X5_250">5x5 (250 markers)</SelectItem>
+                            <SelectItem value="DICT_5X5_1000">5x5 (1000 markers)</SelectItem>
+                            <SelectItem value="DICT_6X6_50">6x6 (50 markers)</SelectItem>
+                            <SelectItem value="DICT_6X6_100">6x6 (100 markers)</SelectItem>
+                            <SelectItem value="DICT_6X6_250">6x6 (250 markers)</SelectItem>
+                            <SelectItem value="DICT_6X6_1000">6x6 (1000 markers)</SelectItem>
+                            <SelectItem value="DICT_7X7_50">7x7 (50 markers)</SelectItem>
+                            <SelectItem value="DICT_7X7_100">7x7 (100 markers)</SelectItem>
+                            <SelectItem value="DICT_7X7_250">7x7 (250 markers)</SelectItem>
+                            <SelectItem value="DICT_7X7_1000">7x7 (1000 markers)</SelectItem>
+                            <SelectItem value="DICT_ARUCO_ORIGINAL">ArUco Original</SelectItem>
+                            <SelectItem value="DICT_APRILTAG_16h5">AprilTag 16h5</SelectItem>
+                            <SelectItem value="DICT_APRILTAG_25h9">AprilTag 25h9</SelectItem>
+                            <SelectItem value="DICT_APRILTAG_36h10">AprilTag 36h10</SelectItem>
+                            <SelectItem value="DICT_APRILTAG_36h11">AprilTag 36h11</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-sm text-stone-500 dark:text-stone-400">Select the ArUco dictionary used to generate your board</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-4">

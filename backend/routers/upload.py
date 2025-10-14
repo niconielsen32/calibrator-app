@@ -84,11 +84,59 @@ async def get_session_images(
     images = db.query(CalibrationImage).filter(
         CalibrationImage.session_id == session_id
     ).all()
-    
+
     if not images:
         raise HTTPException(status_code=404, detail="No images found for this session")
-        
+
     return {
         "session_id": session_id,
         "images": [{"path": img.image_path} for img in images]
+    }
+
+@router.delete("/session/{session_id}")
+async def delete_session(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """Delete a session and all associated images"""
+    import shutil
+
+    # Get session from database
+    session = db.query(DbSession).filter(DbSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Delete physical files
+    if session.images_dir and os.path.exists(session.images_dir):
+        try:
+            shutil.rmtree(session.images_dir)
+        except Exception as e:
+            print(f"Error deleting directory {session.images_dir}: {e}")
+
+    # Delete from database (cascade will handle related records)
+    db.delete(session)
+    db.commit()
+
+    return {"message": f"Session {session_id} and all associated data deleted successfully"}
+
+@router.post("/cleanup")
+async def trigger_cleanup(
+    hours_old: int = 24,
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger cleanup of old sessions.
+
+    Args:
+        hours_old: Delete sessions older than this many hours (default 24)
+    """
+    from ..utils.cleanup import cleanup_old_sessions, cleanup_orphaned_files
+
+    deleted_sessions = cleanup_old_sessions(hours_old)
+    deleted_orphaned = cleanup_orphaned_files()
+
+    return {
+        "message": "Cleanup completed successfully",
+        "deleted_sessions": deleted_sessions,
+        "deleted_orphaned_directories": deleted_orphaned
     } 

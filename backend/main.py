@@ -3,15 +3,47 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from typing import Optional
+from contextlib import asynccontextmanager
+import threading
+import time
 
 # Import routers
 from .routers import upload, calibration
+from .utils.cleanup import cleanup_old_sessions, cleanup_orphaned_files
+
+def run_cleanup_task():
+    """Background task to cleanup old sessions periodically"""
+    while True:
+        try:
+            # Sleep for 1 hour
+            time.sleep(1 * 60 * 60)
+            print("Running scheduled cleanup...")
+            cleanup_old_sessions(hours_old=24)
+            cleanup_orphaned_files()
+        except Exception as e:
+            print(f"Error in cleanup task: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start background cleanup task
+    cleanup_thread = threading.Thread(target=run_cleanup_task, daemon=True)
+    cleanup_thread.start()
+    print("Background cleanup task started (runs every hour)")
+
+    # Run initial cleanup on startup
+    print("Running initial cleanup on startup...")
+    cleanup_old_sessions(hours_old=24)
+    cleanup_orphaned_files()
+
+    yield
+    # Shutdown: Nothing to cleanup
 
 # Create FastAPI app
 app = FastAPI(
     title="Camera Calibration API",
     description="API for camera calibration using OpenCV",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Configure CORS for frontend access
