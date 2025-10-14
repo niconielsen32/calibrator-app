@@ -10,6 +10,9 @@ import CameraCalibration from "./pages/CameraCalibration";
 import Results from "./pages/Results";
 import Documentation from "./pages/Documentation";
 import NotFound from "./pages/NotFound";
+import StereoCalibration from "./pages/StereoCalibration";
+import LiveCalibration from "./pages/LiveCalibration";
+import QualityAdvisor from "./pages/QualityAdvisor";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +30,9 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Navigate to="/calibration" replace />} />
                   <Route path="/calibration" element={<CameraCalibration />} />
+                  <Route path="/stereo" element={<StereoCalibration />} />
+                  <Route path="/live" element={<LiveCalibration />} />
+                  <Route path="/quality" element={<QualityAdvisor />} />
                   <Route path="/results" element={<Results />} />
                   <Route path="/documentation" element={<Documentation />} />
                   <Route path="*" element={<NotFound />} />

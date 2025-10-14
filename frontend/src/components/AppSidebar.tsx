@@ -8,7 +8,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Sun,
-  Moon
+  Moon,
+  Video,
+  TrendingUp,
+  Layers
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -19,7 +22,25 @@ const navigationItems = [
     title: 'Camera Calibration',
     href: '/calibration',
     icon: Camera,
-    pattern: /^\/calibration/
+    pattern: /^\/calibration$/
+  },
+  {
+    title: 'Stereo Calibration',
+    href: '/stereo',
+    icon: Layers,
+    pattern: /^\/stereo/
+  },
+  {
+    title: 'Live Calibration',
+    href: '/live',
+    icon: Video,
+    pattern: /^\/live/
+  },
+  {
+    title: 'Quality Advisor',
+    href: '/quality',
+    icon: TrendingUp,
+    pattern: /^\/quality/
   },
   {
     title: 'Results',
