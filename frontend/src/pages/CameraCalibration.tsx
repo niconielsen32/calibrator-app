@@ -13,7 +13,11 @@ import { Badge } from '@/components/ui/badge';
 import { CheckedState } from '@radix-ui/react-checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-const API_URL = 'http://127.0.0.1:8000/api/v1';
+// Use relative URL in production (when served from same container)
+// or localhost for development
+const API_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : '/api/v1'
+);
 
 interface PreviewResult {
   image_path: string;

@@ -4,6 +4,10 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
+# Build arg for API URL (injected at build time)
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
 # Install deps
 COPY frontend/package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
