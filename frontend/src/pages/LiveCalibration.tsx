@@ -48,7 +48,15 @@ const LiveCalibration = () => {
   const getWebSocketUrl = () => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiBase = API_URL.replace('http://', '').replace('https://', '');
-    return `${wsProtocol}//${apiBase}/live/stream`;
+    const wsUrl = `${wsProtocol}//${apiBase}/live/stream`;
+    console.log('[WebSocket] URL Construction:', {
+      windowProtocol: window.location.protocol,
+      API_URL,
+      wsProtocol,
+      apiBase,
+      finalWsUrl: wsUrl
+    });
+    return wsUrl;
   };
 
   useEffect(() => {
@@ -108,21 +116,35 @@ const LiveCalibration = () => {
   const connectWebSocket = () => {
     try {
       const wsUrl = getWebSocketUrl();
-      console.log('Connecting to WebSocket:', wsUrl);
+      console.log('[WebSocket] Attempting to connect to:', wsUrl);
+      console.log('[WebSocket] Current state:', {
+        isStreaming,
+        wsConnected,
+        existingWs: wsRef.current ? 'exists' : 'null'
+      });
 
       const ws = new WebSocket(wsUrl);
+      console.log('[WebSocket] WebSocket object created, readyState:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WebSocket] ✅ Connection established! readyState:', ws.readyState);
         setWsConnected(true);
         setMessage('Camera started successfully - Connected to server');
       };
 
       ws.onmessage = (event) => {
+        console.log('[WebSocket] 📨 Message received:', event.data);
         try {
           const data = JSON.parse(event.data);
+          console.log('[WebSocket] Parsed message data:', data);
 
           if (data.type === 'detection_result') {
+            console.log('[WebSocket] Detection result:', {
+              found: data.found,
+              num_corners: data.num_corners,
+              quality_score: data.quality_score,
+              should_capture: data.should_capture
+            });
             setDetectionResult(data);
             processingRef.current = false;
             setIsProcessing(false);
@@ -133,30 +155,39 @@ const LiveCalibration = () => {
 
               // Auto-capture if enabled and quality is good
               if (autoCapture && data.should_capture) {
+                console.log('[WebSocket] Auto-capturing image...');
                 captureImageFromData(data.annotated_image);
               }
             } else {
               setMessage('Move the calibration pattern in front of the camera');
             }
           } else if (data.type === 'error') {
-            console.error('WebSocket error from server:', data.message);
+            console.error('[WebSocket] ❌ Error from server:', data.message);
             setMessage(`Error: ${data.message}`);
             processingRef.current = false;
             setIsProcessing(false);
+          } else {
+            console.warn('[WebSocket] Unknown message type:', data.type);
           }
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error('[WebSocket] ❌ Error parsing message:', error, 'Raw data:', event.data);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] ❌ Error event:', error);
+        console.log('[WebSocket] Error details - readyState:', ws.readyState);
         setMessage('Error: Failed to connect to server');
         setWsConnected(false);
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('[WebSocket] 🔌 Connection closed:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          readyState: ws.readyState
+        });
         setWsConnected(false);
         if (isStreaming) {
           setMessage('Warning: Connection to server lost');
@@ -164,28 +195,33 @@ const LiveCalibration = () => {
       };
 
       wsRef.current = ws;
+      console.log('[WebSocket] WebSocket reference stored');
     } catch (error) {
-      console.error('Error creating WebSocket:', error);
+      console.error('[WebSocket] ❌ Exception creating WebSocket:', error);
       setMessage('Error: Failed to establish server connection');
     }
   };
 
   const startStream = async () => {
+    console.log('[Camera] Starting camera stream...');
     try {
       // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('[Camera] getUserMedia not supported');
         setMessage('Error: Camera access is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Safari.');
         return;
       }
 
       // Check if the page is served over HTTPS or localhost
       const isSecureContext = window.isSecureContext;
+      console.log('[Camera] Secure context:', isSecureContext);
       if (!isSecureContext) {
         setMessage('Error: Camera access requires HTTPS. Please ensure your app is deployed with HTTPS enabled.');
         console.error('Camera access blocked: Page must be served over HTTPS or localhost');
         return;
       }
 
+      console.log('[Camera] Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -193,16 +229,21 @@ const LiveCalibration = () => {
         }
       });
 
+      console.log('[Camera] ✅ Camera access granted');
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setIsStreaming(true);
         setMessage('Camera started - Connecting to server...');
+        console.log('[Camera] Video stream assigned to video element');
 
         // Connect WebSocket
+        console.log('[Camera] Initiating WebSocket connection...');
         connectWebSocket();
 
         // Create session
+        console.log('[Camera] Creating upload session...');
         const response = await fetch(`${API_URL}/upload/`, {
           method: 'POST',
           body: new FormData(), // Empty initially
@@ -211,12 +252,13 @@ const LiveCalibration = () => {
         if (response.ok) {
           const data = await response.json();
           setSessionId(data.session_id);
+          console.log('[Camera] ✅ Session created:', data.session_id);
         } else {
-          console.error('Failed to create session:', response.statusText);
+          console.error('[Camera] ❌ Failed to create session:', response.statusText);
         }
       }
     } catch (error: any) {
-      console.error('Error accessing camera:', error);
+      console.error('[Camera] ❌ Error accessing camera:', error);
 
       // Provide specific error messages based on error type
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
@@ -249,14 +291,41 @@ const LiveCalibration = () => {
   };
 
   const sendFrameToWebSocket = () => {
-    if (!videoRef.current || !canvasRef.current || !wsRef.current || processingRef.current) return;
-    if (wsRef.current.readyState !== WebSocket.OPEN) return;
+    console.log('[Frame] sendFrameToWebSocket called, checking conditions...');
+
+    if (!videoRef.current) {
+      console.log('[Frame] ❌ No video ref');
+      return;
+    }
+    if (!canvasRef.current) {
+      console.log('[Frame] ❌ No canvas ref');
+      return;
+    }
+    if (!wsRef.current) {
+      console.log('[Frame] ❌ No WebSocket ref');
+      return;
+    }
+    if (processingRef.current) {
+      console.log('[Frame] ⏸️ Already processing, skipping frame');
+      return;
+    }
+
+    const wsState = wsRef.current.readyState;
+    console.log('[Frame] WebSocket state:', wsState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
+    if (wsState !== WebSocket.OPEN) {
+      console.log('[Frame] ❌ WebSocket not open, skipping frame');
+      return;
+    }
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      console.log('[Frame] ❌ Video not ready, readyState:', video.readyState);
+      return;
+    }
 
+    console.log('[Frame] ✅ All checks passed, processing frame...');
     processingRef.current = true;
     setIsProcessing(true);
 
@@ -264,10 +333,13 @@ const LiveCalibration = () => {
       // Get current frame from canvas for pattern detection
       canvas.toBlob((blob) => {
         if (!blob || !wsRef.current) {
+          console.log('[Frame] ❌ Blob creation failed or WebSocket lost');
           processingRef.current = false;
           setIsProcessing(false);
           return;
         }
+
+        console.log('[Frame] Blob created, size:', blob.size, 'bytes');
 
         // Convert to base64
         const reader = new FileReader();
@@ -278,36 +350,48 @@ const LiveCalibration = () => {
             const base64data = reader.result as string;
             const base64Image = base64data.split(',')[1];
 
+            const payload = {
+              type: 'frame',
+              image_data: base64Image,
+              pattern_type: patternType,
+              checkerboard_columns: parseInt(checkerboardWidth),
+              checkerboard_rows: parseInt(checkerboardHeight),
+              marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) : null,
+              aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : null,
+            };
+
+            console.log('[Frame] Sending frame to WebSocket:', {
+              type: payload.type,
+              pattern_type: payload.pattern_type,
+              checkerboard_columns: payload.checkerboard_columns,
+              checkerboard_rows: payload.checkerboard_rows,
+              image_data_length: base64Image.length
+            });
+
             // Send frame via WebSocket
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({
-                type: 'frame',
-                image_data: base64Image,
-                pattern_type: patternType,
-                checkerboard_columns: parseInt(checkerboardWidth),
-                checkerboard_rows: parseInt(checkerboardHeight),
-                marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) : null,
-                aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : null,
-              }));
+              wsRef.current.send(JSON.stringify(payload));
+              console.log('[Frame] ✅ Frame sent successfully');
             } else {
+              console.log('[Frame] ❌ WebSocket not open at send time');
               processingRef.current = false;
               setIsProcessing(false);
             }
           } catch (error) {
-            console.error('Error sending frame:', error);
+            console.error('[Frame] ❌ Error sending frame:', error);
             processingRef.current = false;
             setIsProcessing(false);
           }
         };
 
-        reader.onerror = () => {
-          console.error('Error reading blob');
+        reader.onerror = (error) => {
+          console.error('[Frame] ❌ Error reading blob:', error);
           processingRef.current = false;
           setIsProcessing(false);
         };
       }, 'image/jpeg', 0.95);
     } catch (error) {
-      console.error('Error in sendFrameToWebSocket:', error);
+      console.error('[Frame] ❌ Exception in sendFrameToWebSocket:', error);
       processingRef.current = false;
       setIsProcessing(false);
     }

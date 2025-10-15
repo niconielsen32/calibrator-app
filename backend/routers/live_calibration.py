@@ -285,22 +285,59 @@ async def websocket_stream(websocket: WebSocket):
     """
     WebSocket endpoint for real-time pattern detection
     """
-    await websocket.accept()
+    print(f"[WebSocket] New connection attempt from {websocket.client}")
 
     try:
+        await websocket.accept()
+        print(f"[WebSocket] ✅ Connection accepted from {websocket.client}")
+    except Exception as e:
+        print(f"[WebSocket] ❌ Failed to accept connection: {e}")
+        return
+
+    try:
+        frame_count = 0
         while True:
             # Receive data from client
+            print(f"[WebSocket] Waiting for data from client...")
             data = await websocket.receive_text()
-            message = json.loads(data)
+            frame_count += 1
+            print(f"[WebSocket] 📨 Received frame #{frame_count}, data length: {len(data)} chars")
+
+            try:
+                message = json.loads(data)
+                print(f"[WebSocket] Parsed message type: {message.get('type')}")
+            except json.JSONDecodeError as e:
+                print(f"[WebSocket] ❌ JSON decode error: {e}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Invalid JSON: {str(e)}"
+                })
+                continue
 
             if message.get("type") == "frame":
-                # Decode base64 image
-                image_data = base64.b64decode(message["image_data"])
-                nparr = np.frombuffer(image_data, np.uint8)
-                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                print(f"[WebSocket] Processing frame with pattern: {message.get('pattern_type')}")
+                print(f"[WebSocket] Checkerboard size: {message.get('checkerboard_columns')}x{message.get('checkerboard_rows')}")
 
-                if image is not None:
+                try:
+                    # Decode base64 image
+                    image_data = base64.b64decode(message["image_data"])
+                    print(f"[WebSocket] Decoded image data: {len(image_data)} bytes")
+
+                    nparr = np.frombuffer(image_data, np.uint8)
+                    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                    if image is None:
+                        print(f"[WebSocket] ❌ Failed to decode image with cv2.imdecode")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Invalid image data - cv2.imdecode returned None"
+                        })
+                        continue
+
+                    print(f"[WebSocket] Image decoded successfully: {image.shape}")
+
                     # Detect pattern
+                    print(f"[WebSocket] Detecting pattern...")
                     result = detect_pattern_in_image(
                         image,
                         message["pattern_type"],
@@ -309,33 +346,52 @@ async def websocket_stream(websocket: WebSocket):
                         message.get("aruco_dict_name")
                     )
 
+                    print(f"[WebSocket] Detection result: found={result['found']}, corners={result['num_corners']}, quality={result['quality_score']:.2f}")
+
                     # Encode annotated image
                     _, buffer = cv2.imencode('.jpg', result["annotated_image"])
                     annotated_base64 = base64.b64encode(buffer).decode('utf-8')
+                    print(f"[WebSocket] Encoded annotated image: {len(annotated_base64)} chars")
 
                     # Send result back to client
-                    await websocket.send_json({
+                    response = {
                         "type": "detection_result",
                         "found": result["found"],
                         "num_corners": result["num_corners"],
                         "quality_score": result["quality_score"],
                         "annotated_image": annotated_base64,
                         "should_capture": result["found"] and result["quality_score"] >= 0.7
-                    })
-                else:
+                    }
+                    await websocket.send_json(response)
+                    print(f"[WebSocket] ✅ Sent detection result to client")
+
+                except KeyError as e:
+                    print(f"[WebSocket] ❌ Missing required field: {e}")
                     await websocket.send_json({
                         "type": "error",
-                        "message": "Invalid image data"
+                        "message": f"Missing required field: {str(e)}"
                     })
+                except Exception as e:
+                    print(f"[WebSocket] ❌ Error processing frame: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Error processing frame: {str(e)}"
+                    })
+            else:
+                print(f"[WebSocket] ⚠️ Unknown message type: {message.get('type')}")
 
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
+        print(f"[WebSocket] 🔌 Client disconnected: {websocket.client}")
     except Exception as e:
-        print(f"WebSocket error: {str(e)}")
+        print(f"[WebSocket] ❌ Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         try:
             await websocket.send_json({
                 "type": "error",
                 "message": str(e)
             })
         except:
-            pass
+            print(f"[WebSocket] Could not send error message to client")
