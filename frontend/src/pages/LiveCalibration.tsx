@@ -49,13 +49,46 @@ const LiveCalibration = () => {
   }, []);
 
   useEffect(() => {
-    // Process frames periodically when streaming
-    if (isStreaming) {
-      const interval = setInterval(() => {
-        processFrame();
-      }, 500); // Process every 500ms
+    // Draw frames continuously when streaming for live feed display
+    let animationFrameId: number;
 
-      return () => clearInterval(interval);
+    const drawLoop = () => {
+      if (isStreaming && videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+          // Set canvas size to match video (only once)
+          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+          }
+
+          // Draw the current video frame
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // Draw coverage guidance overlay
+          drawCoverageGuidance(ctx, canvas.width, canvas.height);
+        }
+
+        animationFrameId = requestAnimationFrame(drawLoop);
+      }
+    };
+
+    if (isStreaming) {
+      // Start continuous drawing loop for live video feed
+      animationFrameId = requestAnimationFrame(drawLoop);
+
+      // Process pattern detection periodically (less frequently)
+      const detectionInterval = setInterval(() => {
+        processFrame();
+      }, 500); // Process pattern detection every 500ms
+
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+        clearInterval(detectionInterval);
+      };
     }
   }, [isStreaming, patternType, checkerboardWidth, checkerboardHeight]);
 
@@ -103,83 +136,72 @@ const LiveCalibration = () => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
 
-    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    setIsProcessing(true);
 
-    // Draw current frame
-    ctx.drawImage(video, 0, 0);
+    try {
+      // Get current frame from canvas for pattern detection
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsProcessing(false);
+          return;
+        }
 
-    // Get image data
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
+        try {
+          // Convert to base64
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
 
-      setIsProcessing(true);
+          reader.onloadend = async () => {
+            const base64data = reader.result as string;
+            const base64Image = base64data.split(',')[1];
 
-      try {
-        // Convert to base64
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
+            // Send to backend for detection
+            const response = await fetch(`${API_URL}/live/detect-pattern`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                image_data: base64Image,
+                pattern_type: patternType,
+                checkerboard_columns: parseInt(checkerboardWidth),
+                checkerboard_rows: parseInt(checkerboardHeight),
+                marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) : null,
+                aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : null,
+              }),
+            });
 
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          const base64Image = base64data.split(',')[1];
+            if (response.ok) {
+              const result = await response.json();
+              setDetectionResult(result);
 
-          // Send to backend for detection
-          const response = await fetch(`${API_URL}/live/detect-pattern`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              image_data: base64Image,
-              pattern_type: patternType,
-              checkerboard_columns: parseInt(checkerboardWidth),
-              checkerboard_rows: parseInt(checkerboardHeight),
-              marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) : null,
-              aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : null,
-            }),
-          });
+              // Update message based on detection
+              if (result.found) {
+                setMessage(`Pattern detected! Quality: ${(result.quality_score * 100).toFixed(0)}%`);
 
-          if (response.ok) {
-            const result = await response.json();
-            setDetectionResult(result);
-
-            // Update message based on detection
-            if (result.found) {
-              setMessage(`Pattern detected! Quality: ${(result.quality_score * 100).toFixed(0)}%`);
-
-              // Auto-capture if enabled and quality is good
-              if (autoCapture && result.should_capture) {
-                await captureImage(base64Image);
+                // Auto-capture if enabled and quality is good
+                if (autoCapture && result.should_capture) {
+                  await captureImage(base64Image);
+                }
+              } else {
+                setMessage('Move the calibration pattern in front of the camera');
               }
-            } else {
-              setMessage('Move the calibration pattern in front of the camera');
             }
 
-            // Draw annotated image
-            if (ctx) {
-              const img = new Image();
-              img.onload = () => {
-                ctx.drawImage(img, 0, 0);
-
-                // Draw coverage guidance overlay
-                drawCoverageGuidance(ctx, canvas.width, canvas.height);
-              };
-              img.src = `data:image/jpeg;base64,${result.annotated_image}`;
-            }
-          }
-        };
-      } catch (error) {
-        console.error('Error processing frame:', error);
-      } finally {
-        setIsProcessing(false);
-      }
-    }, 'image/jpeg', 0.95);
+            setIsProcessing(false);
+          };
+        } catch (error) {
+          console.error('Error processing frame:', error);
+          setIsProcessing(false);
+        }
+      }, 'image/jpeg', 0.95);
+    } catch (error) {
+      console.error('Error in processFrame:', error);
+      setIsProcessing(false);
+    }
   };
 
   const drawCoverageGuidance = (ctx: CanvasRenderingContext2D, width: number, height: number) => {

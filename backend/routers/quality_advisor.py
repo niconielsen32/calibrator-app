@@ -380,3 +380,44 @@ async def get_quality_metrics(session_id: str, db: Session = Depends(get_db)):
         "created_at": metrics.created_at,
         "updated_at": metrics.updated_at
     }
+
+@router.get("/latest-calibration")
+async def get_latest_calibration(db: Session = Depends(get_db)):
+    """
+    Get the most recent calibration session with quality metrics
+    """
+    from ..database import CalibrationResult
+
+    # Get the latest calibration result
+    latest_result = db.query(CalibrationResult).order_by(
+        CalibrationResult.created_at.desc()
+    ).first()
+
+    if not latest_result:
+        raise HTTPException(status_code=404, detail="No calibration found")
+
+    # Get the associated session
+    session = db.query(DBSession).filter(DBSession.id == latest_result.session_id).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get quality metrics if available
+    quality_metrics = db.query(CalibrationQualityMetrics).filter(
+        CalibrationQualityMetrics.session_id == latest_result.session_id
+    ).first()
+
+    return {
+        "session_id": latest_result.session_id,
+        "pattern_type": latest_result.pattern_type,
+        "checkerboard_columns": latest_result.columns,
+        "checkerboard_rows": latest_result.rows,
+        "square_size": latest_result.square_size,
+        "reprojection_error": latest_result.reprojection_error,
+        "created_at": latest_result.created_at,
+        "has_quality_metrics": quality_metrics is not None,
+        "quality_metrics": {
+            "coverage_score": quality_metrics.coverage_score if quality_metrics else None,
+            "pose_diversity_score": quality_metrics.pose_diversity_score if quality_metrics else None,
+        } if quality_metrics else None
+    }

@@ -27,6 +27,39 @@ const QualityAdvisor = () => {
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingLatest, setIsLoadingLatest] = useState(false);
+
+  const loadLatestCalibration = async () => {
+    setIsLoadingLatest(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/quality/latest-calibration`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to load latest calibration');
+      }
+
+      const data = await response.json();
+
+      // Populate the form with latest calibration data
+      setSessionId(data.session_id);
+      setPatternType(data.pattern_type);
+      setCheckerboardWidth(data.checkerboard_columns.toString());
+      setCheckerboardHeight(data.checkerboard_rows.toString());
+      setSquareSize((data.square_size * 1000).toString()); // Convert from meters to mm
+
+      // Automatically trigger analysis
+      setTimeout(() => {
+        analyzeQuality();
+      }, 100);
+    } catch (error: any) {
+      setError(error.message || 'Failed to load latest calibration');
+    } finally {
+      setIsLoadingLatest(false);
+    }
+  };
 
   const analyzeQuality = async () => {
     if (!sessionId) {
@@ -136,10 +169,33 @@ const QualityAdvisor = () => {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Analyze Calibration Dataset</CardTitle>
-          <CardDescription>Enter your session ID and pattern configuration</CardDescription>
+          <CardDescription>Enter your session ID and pattern configuration, or view your latest calibration</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {/* Latest Calibration Button */}
+            <div className="flex justify-center pb-4 border-b">
+              <Button
+                onClick={loadLatestCalibration}
+                disabled={isLoadingLatest || isAnalyzing}
+                variant="outline"
+                size="lg"
+                className="w-full md:w-auto"
+              >
+                {isLoadingLatest ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Loading Latest Calibration...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-5 h-5 mr-2" />
+                    View Latest Calibration
+                  </>
+                )}
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Label htmlFor="session-id">Session ID</Label>
