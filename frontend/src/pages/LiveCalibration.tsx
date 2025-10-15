@@ -18,10 +18,13 @@ const LiveCalibration = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const processingRef = useRef<boolean>(false);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [capturedImages, setCapturedImages] = useState<number>(0);
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Pattern configuration
   const [patternType, setPatternType] = useState('Checkerboard');
@@ -41,10 +44,20 @@ const LiveCalibration = () => {
   // Coverage feedback
   const [coverageAreas, setCoverageAreas] = useState<Set<string>>(new Set());
 
+  // Get WebSocket URL from API URL
+  const getWebSocketUrl = () => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiBase = API_URL.replace('http://', '').replace('https://', '');
+    return `${wsProtocol}//${apiBase}/live/stream`;
+  };
+
   useEffect(() => {
     // Cleanup on unmount
     return () => {
       stopStream();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
   }, []);
 
@@ -76,21 +89,86 @@ const LiveCalibration = () => {
       }
     };
 
-    if (isStreaming) {
+    if (isStreaming && wsConnected) {
       // Start continuous drawing loop for live video feed
       animationFrameId = requestAnimationFrame(drawLoop);
 
-      // Process pattern detection periodically (less frequently)
+      // Process pattern detection via WebSocket periodically
       const detectionInterval = setInterval(() => {
-        processFrame();
-      }, 500); // Process pattern detection every 500ms
+        sendFrameToWebSocket();
+      }, 500); // Send frame every 500ms
 
       return () => {
         cancelAnimationFrame(animationFrameId);
         clearInterval(detectionInterval);
       };
     }
-  }, [isStreaming, patternType, checkerboardWidth, checkerboardHeight, coverageAreas]);
+  }, [isStreaming, wsConnected, patternType, checkerboardWidth, checkerboardHeight, coverageAreas]);
+
+  const connectWebSocket = () => {
+    try {
+      const wsUrl = getWebSocketUrl();
+      console.log('Connecting to WebSocket:', wsUrl);
+
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setWsConnected(true);
+        setMessage('Camera started successfully - Connected to server');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'detection_result') {
+            setDetectionResult(data);
+            processingRef.current = false;
+            setIsProcessing(false);
+
+            // Update message based on detection
+            if (data.found) {
+              setMessage(`Pattern detected! Quality: ${(data.quality_score * 100).toFixed(0)}%`);
+
+              // Auto-capture if enabled and quality is good
+              if (autoCapture && data.should_capture) {
+                captureImageFromData(data.annotated_image);
+              }
+            } else {
+              setMessage('Move the calibration pattern in front of the camera');
+            }
+          } else if (data.type === 'error') {
+            console.error('WebSocket error from server:', data.message);
+            setMessage(`Error: ${data.message}`);
+            processingRef.current = false;
+            setIsProcessing(false);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setMessage('Error: Failed to connect to server');
+        setWsConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setWsConnected(false);
+        if (isStreaming) {
+          setMessage('Warning: Connection to server lost');
+        }
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('Error creating WebSocket:', error);
+      setMessage('Error: Failed to establish server connection');
+    }
+  };
 
   const startStream = async () => {
     try {
@@ -119,7 +197,10 @@ const LiveCalibration = () => {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setIsStreaming(true);
-        setMessage('Camera started successfully');
+        setMessage('Camera started - Connecting to server...');
+
+        // Connect WebSocket
+        connectWebSocket();
 
         // Create session
         const response = await fetch(`${API_URL}/upload/`, {
@@ -159,78 +240,75 @@ const LiveCalibration = () => {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
     setIsStreaming(false);
+    setWsConnected(false);
   };
 
-  const processFrame = async () => {
-    if (!videoRef.current || !canvasRef.current || isProcessing) return;
+  const sendFrameToWebSocket = () => {
+    if (!videoRef.current || !canvasRef.current || !wsRef.current || processingRef.current) return;
+    if (wsRef.current.readyState !== WebSocket.OPEN) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
     if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+    processingRef.current = true;
     setIsProcessing(true);
 
     try {
       // Get current frame from canvas for pattern detection
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
+      canvas.toBlob((blob) => {
+        if (!blob || !wsRef.current) {
+          processingRef.current = false;
           setIsProcessing(false);
           return;
         }
 
-        try {
-          // Convert to base64
-          const reader = new FileReader();
-          reader.readAsDataURL(blob);
+        // Convert to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
 
-          reader.onloadend = async () => {
+        reader.onloadend = () => {
+          try {
             const base64data = reader.result as string;
             const base64Image = base64data.split(',')[1];
 
-            // Send to backend for detection
-            const response = await fetch(`${API_URL}/live/detect-pattern`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
+            // Send frame via WebSocket
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: 'frame',
                 image_data: base64Image,
                 pattern_type: patternType,
                 checkerboard_columns: parseInt(checkerboardWidth),
                 checkerboard_rows: parseInt(checkerboardHeight),
                 marker_size: patternType === 'ChArUcoboard' ? parseFloat(markerSize) : null,
                 aruco_dict_name: patternType === 'ChArUcoboard' ? arucoDictName : null,
-              }),
-            });
-
-            if (response.ok) {
-              const result = await response.json();
-              setDetectionResult(result);
-
-              // Update message based on detection
-              if (result.found) {
-                setMessage(`Pattern detected! Quality: ${(result.quality_score * 100).toFixed(0)}%`);
-
-                // Auto-capture if enabled and quality is good
-                if (autoCapture && result.should_capture) {
-                  await captureImage(base64Image);
-                }
-              } else {
-                setMessage('Move the calibration pattern in front of the camera');
-              }
+              }));
+            } else {
+              processingRef.current = false;
+              setIsProcessing(false);
             }
-
+          } catch (error) {
+            console.error('Error sending frame:', error);
+            processingRef.current = false;
             setIsProcessing(false);
-          };
-        } catch (error) {
-          console.error('Error processing frame:', error);
+          }
+        };
+
+        reader.onerror = () => {
+          console.error('Error reading blob');
+          processingRef.current = false;
           setIsProcessing(false);
-        }
+        };
       }, 'image/jpeg', 0.95);
     } catch (error) {
-      console.error('Error in processFrame:', error);
+      console.error('Error in sendFrameToWebSocket:', error);
+      processingRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -297,6 +375,11 @@ const LiveCalibration = () => {
     }
   };
 
+  const captureImageFromData = async (annotatedBase64: string) => {
+    // Capture from the annotated image received from WebSocket
+    await captureImage(annotatedBase64);
+  };
+
   const manualCapture = async () => {
     if (!canvasRef.current) return;
 
@@ -337,7 +420,14 @@ const LiveCalibration = () => {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Camera Feed</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Camera Feed</span>
+                {isStreaming && (
+                  <Badge variant={wsConnected ? "default" : "secondary"} className="text-xs">
+                    {wsConnected ? '● Connected' : '○ Connecting...'}
+                  </Badge>
+                )}
+              </CardTitle>
               <CardDescription>Position the calibration pattern in view</CardDescription>
             </CardHeader>
             <CardContent>

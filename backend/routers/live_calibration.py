@@ -279,3 +279,63 @@ async def stop_live_capture_session(live_session_id: str, db: Session = Depends(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.websocket("/stream")
+async def websocket_stream(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time pattern detection
+    """
+    await websocket.accept()
+
+    try:
+        while True:
+            # Receive data from client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            if message.get("type") == "frame":
+                # Decode base64 image
+                image_data = base64.b64decode(message["image_data"])
+                nparr = np.frombuffer(image_data, np.uint8)
+                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                if image is not None:
+                    # Detect pattern
+                    result = detect_pattern_in_image(
+                        image,
+                        message["pattern_type"],
+                        (message["checkerboard_columns"], message["checkerboard_rows"]),
+                        message.get("marker_size"),
+                        message.get("aruco_dict_name")
+                    )
+
+                    # Encode annotated image
+                    _, buffer = cv2.imencode('.jpg', result["annotated_image"])
+                    annotated_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                    # Send result back to client
+                    await websocket.send_json({
+                        "type": "detection_result",
+                        "found": result["found"],
+                        "num_corners": result["num_corners"],
+                        "quality_score": result["quality_score"],
+                        "annotated_image": annotated_base64,
+                        "should_capture": result["found"] and result["quality_score"] >= 0.7
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Invalid image data"
+                    })
+
+    except WebSocketDisconnect:
+        print("WebSocket client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {str(e)}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except:
+            pass
