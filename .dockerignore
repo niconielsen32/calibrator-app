@@ -22,5 +22,4 @@ venv
 
 # Others
 *.log
-*.lock
 *.lockb
