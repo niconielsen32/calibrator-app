@@ -461,6 +461,7 @@ const StereoCalibration = () => {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 };
