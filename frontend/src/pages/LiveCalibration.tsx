@@ -90,10 +90,24 @@ const LiveCalibration = () => {
         clearInterval(detectionInterval);
       };
     }
-  }, [isStreaming, patternType, checkerboardWidth, checkerboardHeight]);
+  }, [isStreaming, patternType, checkerboardWidth, checkerboardHeight, coverageAreas]);
 
   const startStream = async () => {
     try {
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setMessage('Error: Camera access is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Safari.');
+        return;
+      }
+
+      // Check if the page is served over HTTPS or localhost
+      const isSecureContext = window.isSecureContext;
+      if (!isSecureContext) {
+        setMessage('Error: Camera access requires HTTPS. Please ensure your app is deployed with HTTPS enabled.');
+        console.error('Camera access blocked: Page must be served over HTTPS or localhost');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -105,6 +119,7 @@ const LiveCalibration = () => {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setIsStreaming(true);
+        setMessage('Camera started successfully');
 
         // Create session
         const response = await fetch(`${API_URL}/upload/`, {
@@ -115,11 +130,27 @@ const LiveCalibration = () => {
         if (response.ok) {
           const data = await response.json();
           setSessionId(data.session_id);
+        } else {
+          console.error('Failed to create session:', response.statusText);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accessing camera:', error);
-      setMessage('Error: Could not access camera');
+
+      // Provide specific error messages based on error type
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        setMessage('Error: Camera access denied. Please allow camera permissions in your browser settings.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        setMessage('Error: No camera found. Please connect a camera and try again.');
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        setMessage('Error: Camera is already in use by another application.');
+      } else if (error.name === 'OverconstrainedError') {
+        setMessage('Error: Camera does not support the requested resolution.');
+      } else if (error.name === 'SecurityError') {
+        setMessage('Error: Camera access blocked due to security restrictions. Ensure the page is served over HTTPS.');
+      } else {
+        setMessage(`Error: Could not access camera - ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -312,11 +343,14 @@ const LiveCalibration = () => {
             <CardContent>
               <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
                 {!isStreaming ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 p-4">
                     <Button onClick={startStream} size="lg">
                       <Play className="w-5 h-5 mr-2" />
                       Start Camera
                     </Button>
+                    <p className="text-sm text-muted-foreground text-center max-w-md">
+                      Note: Camera access requires HTTPS in production. Ensure your browser allows camera permissions.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -334,6 +368,13 @@ const LiveCalibration = () => {
                   </>
                 )}
               </div>
+
+              {/* Show messages at all times if present */}
+              {message && (
+                <Alert className="mt-4" variant={message.startsWith('Error') ? 'destructive' : 'default'}>
+                  <AlertDescription>{message}</AlertDescription>
+                </Alert>
+              )}
 
               {isStreaming && (
                 <div className="mt-4 space-y-4">
@@ -357,12 +398,6 @@ const LiveCalibration = () => {
                       {detectionResult?.found ? 'Pattern Detected' : 'No Pattern'}
                     </Badge>
                   </div>
-
-                  {message && (
-                    <Alert>
-                      <AlertDescription>{message}</AlertDescription>
-                    </Alert>
-                  )}
                 </div>
               )}
             </CardContent>
